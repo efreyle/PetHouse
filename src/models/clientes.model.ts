@@ -1,6 +1,6 @@
-import {Entity, model, property, hasMany} from '@loopback/repository';
-import {Pedido} from './pedido.model';
+import {Entity, hasMany, model, property} from '@loopback/repository';
 import {Mascotas} from './mascotas.model';
+import {Pedido} from './pedido.model';
 
 @model()
 export class Clientes extends Entity {
@@ -37,7 +37,7 @@ export class Clientes extends Entity {
 
   @property({
     type: 'string',
-    required: true,
+    required: false,
   })
   clave: string;
 

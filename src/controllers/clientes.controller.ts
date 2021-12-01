@@ -1,3 +1,4 @@
+import {service} from '@loopback/core';
 import {
   Count,
   CountSchema,
@@ -8,17 +9,50 @@ import {
 } from '@loopback/repository';
 import {
   del, get,
-  getModelSchemaRef, param, patch, post, put, requestBody,
+  getModelSchemaRef, HttpErrors, param, patch, post, put, requestBody,
   response
 } from '@loopback/rest';
-import {Clientes} from '../models';
+import {Llaves} from '../config/llaves';
+import {Clientes, Credenciales} from '../models';
 import {ClientesRepository} from '../repositories';
+import {AutenticacionService} from '../services';
+const fetch = require("node-fetch");
 
 export class ClientesController {
   constructor(
     @repository(ClientesRepository)
     public clientesRepository: ClientesRepository,
+    @service(AutenticacionService)
+    public servicioAutenticacion: AutenticacionService,
   ) { }
+  @post('/identificarClientes', {
+    responses: {
+      '200': {
+        description: "identificacion de usuarios"
+      }
+    }
+  })
+  async identificarClientes(
+    @requestBody() Credenciales: Credenciales
+  ) {
+
+    let p = await this.servicioAutenticacion.IdentificarClientes(Credenciales.usuario, Credenciales.clave);
+    if (p) {
+      let token = this.servicioAutenticacion.GenerarTokenJWT(p);
+      return {
+        datos: {
+          nombre: p.nombre,
+          correo: p.correo,
+          id: p.idCliente
+        },
+        tk: token
+      }
+
+    } else {
+      throw new HttpErrors[401]("Datos no Validos");
+
+    }
+  }
 
   @post('/clientes')
   @response(200, {
@@ -38,7 +72,22 @@ export class ClientesController {
     })
     clientes: Omit<Clientes, 'id'>,
   ): Promise<Clientes> {
-    return this.clientesRepository.create(clientes);
+
+    let clave = this.servicioAutenticacion.GenararClave();
+    let claveCifrada = this.servicioAutenticacion.CifrarClave(clave);
+    clientes.clave = claveCifrada;
+    let p = await this.clientesRepository.create(clientes);
+
+    //Notificar al  Usuario
+    let destino = clientes.correo;
+    let asunto = 'Registro en la plataforma';
+    let contenido = `Hola ${clientes.nombre}, su nombre es: ${clientes.correo} y su contraseña es: ${clientes.clave}`;
+    fetch(`${Llaves.urlServicioNotificaciones}/envio-correo?correo_destino=${destino}&asunto${asunto}&contenido=${contenido}`)
+      .then((data: any) => {
+        console.log(data);
+      })
+    return p;
+
   }
 
   @get('/clientes/count')
